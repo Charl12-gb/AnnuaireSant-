@@ -16,59 +16,107 @@ const API_BASE_URL = 'http://localhost:8000/api'; // Assurez-vous que c'est corr
 
 // Définir un type pour la structure des comptes API
 interface StructureCounts {
-    [key: string]: number; // Clé est le type de structure (string), valeur est le compte (number)
+    [key: string]: number;
 }
+
+// Définir un type pour les types de structure de l'API
+interface ApiStructureType {
+    value: string;
+    label: string;
+}
+
+// Définir un type pour notre configuration de catégorie fusionnée
+interface CategoryConfig {
+    icon: React.ElementType;
+    name: string;
+    type: string;
+    color: string;
+    bgColor: string;
+    count: number;
+}
+
+// Configuration statique pour les icônes et les couleurs par type
+const staticCategoryDetails: { [key: string]: { icon: React.ElementType, color: string, bgColor: string, defaultName: string } } = {
+    hopital: { icon: Hospital, color: "text-red-600", bgColor: "bg-red-100", defaultName: "Hôpitaux" },
+    clinique: { icon: Stethoscope, color: "text-blue-600", bgColor: "bg-blue-100", defaultName: "Cliniques" },
+    laboratoire: { icon: Microscope, color: "text-green-600", bgColor: "bg-green-100", defaultName: "Laboratoires" },
+    pharmacie: { icon: Pill, color: "text-teal-600", bgColor: "bg-teal-100", defaultName: "Pharmacies" },
+    cabinet_imagerie: { icon: ScanLine, color: "text-purple-600", bgColor: "bg-purple-100", defaultName: "Cabinets d'imagerie" },
+    centre_reeducation: { icon: PersonStanding, color: "text-yellow-600", bgColor: "bg-yellow-100", defaultName: "Centres de rééducation" },
+    ambulance: { icon: Ambulance, color: "text-orange-600", bgColor: "bg-orange-100", defaultName: "Ambulances & Urgences" },
+    cabinet_dentaire: { icon: Syringe, color: "text-pink-600", bgColor: "bg-pink-100", defaultName: "Cabinets dentaires" },
+    // Ajoutez d'autres types ici si nécessaire avec une icône par défaut
+    default: { icon: Hospital, color: "text-gray-600", bgColor: "bg-gray-100", defaultName: "Catégorie" }
+};
+
 
 const FeaturedCategories = () => {
   const navigate = useNavigate();
-  const [categoryCounts, setCategoryCounts] = useState<StructureCounts>({});
-  const [loadingCounts, setLoadingCounts] = useState(true);
-  const [errorCounts, setErrorCounts] = useState<string | null>(null);
-
-  // Définition initiale des catégories avec les icônes et couleurs
-  // Le 'count' sera mis à jour dynamiquement
-  const categoriesConfig = [
-    { icon: Hospital, name: "Hôpitaux", type: "hopital", color: "text-red-600", bgColor: "bg-red-100" },
-    { icon: Stethoscope, name: "Cliniques", type: "clinique", color: "text-blue-600", bgColor: "bg-blue-100" },
-    { icon: Microscope, name: "Laboratoires", type: "laboratoire", color: "text-green-600", bgColor: "bg-green-100" },
-    { icon: Pill, name: "Pharmacies", type: "pharmacie", color: "text-teal-600", bgColor: "bg-teal-100" },
-    { icon: ScanLine, name: "Cabinets d'imagerie", type: "cabinet_imagerie", color: "text-purple-600", bgColor: "bg-purple-100" },
-    { icon: PersonStanding, name: "Centres de rééducation", type: "centre_reeducation", color: "text-yellow-600", bgColor: "bg-yellow-100" },
-    { icon: Ambulance, name: "Ambulances & Urgences", type: "ambulance", color: "text-orange-600", bgColor: "bg-orange-100" },
-    { icon: Syringe, name: "Cabinets dentaires", type: "cabinet_dentaire", color: "text-pink-600", bgColor: "bg-pink-100" },
-  ];
+  const [categories, setCategories] = useState<CategoryConfig[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchCategoryCounts = async () => {
-      setLoadingCounts(true);
-      setErrorCounts(null);
+    const fetchAllCategoryData = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const response = await fetch(`${API_BASE_URL}/structures-counts`);
-        if (!response.ok) {
-          throw new Error(`Erreur HTTP: ${response.status}`);
+        // 1. Fetch structure types
+        const typesResponse = await fetch(`${API_BASE_URL}/structure-types`);
+        if (!typesResponse.ok) {
+          throw new Error(`Erreur HTTP (types): ${typesResponse.status}`);
         }
-        const data = await response.json();
-        
-        // Vérifier si la réponse est bien au format attendu (status: true, counts: {...})
-        if (data.status === true && typeof data.counts === 'object' && data.counts !== null) {
-          setCategoryCounts(data.counts);
-        } else {
-          // Gérer le cas où 'data.counts' est null ou non un objet
-          throw new Error("Format de données des comptes inattendu ou 'counts' manquant.");
+        const typesData = await typesResponse.json();
+        if (!typesData.status || !Array.isArray(typesData.data)) {
+          throw new Error("Format de données des types inattendu.");
         }
-      } catch (err) {
-        console.error("Erreur lors du chargement des comptes de catégories:", err);
-        setErrorCounts("Impossible de charger les comptes.");
+        const apiTypes: ApiStructureType[] = typesData.data;
+
+        // 2. Fetch structure counts
+        const countsResponse = await fetch(`${API_BASE_URL}/structures-counts`);
+        if (!countsResponse.ok) {
+          throw new Error(`Erreur HTTP (counts): ${countsResponse.status}`);
+        }
+        const countsData = await countsResponse.json();
+        if (!countsData.status || typeof countsData.counts !== 'object' || countsData.counts === null) {
+          throw new Error("Format de données des comptes inattendu.");
+        }
+        const apiCounts: StructureCounts = countsData.counts;
+
+        // 3. Merge data
+        const mergedCategories = apiTypes.map(apiType => {
+          const details = staticCategoryDetails[apiType.value] || staticCategoryDetails.default;
+          return {
+            icon: details.icon,
+            name: apiType.label, // Utiliser le label de l'API
+            type: apiType.value,
+            color: details.color,
+            bgColor: details.bgColor,
+            count: apiCounts[apiType.value] !== undefined ? apiCounts[apiType.value] : 0,
+          };
+        });
+
+        setCategories(mergedCategories);
+
+      } catch (err: any) {
+        console.error("Erreur lors du chargement des données de catégories:", err);
+        setError(err.message || "Impossible de charger les catégories et les comptes.");
       } finally {
-        setLoadingCounts(false);
+        setLoading(false);
       }
     };
 
-    fetchCategoryCounts();
+    fetchAllCategoryData();
   }, []);
 
   const handleCategoryClick = (categoryType: string) => {
-    navigate(`/structures/${categoryType}`);
+    // Navigue vers une page de résultats filtrée par ce type de catégorie
+    // ou vers une page dédiée si elle existe.
+    // Pour l'instant, utilisons une URL générique de recherche/liste.
+    navigate(`/search-results?type=${categoryType}`);
+    // Alternative: navigate(`/structures?type=${categoryType}`);
+    // Alternative: navigate(`/category/${categoryType}`);
+    // L'implémentation de la page de destination /search-results doit pouvoir gérer ce paramètre 'type'.
   };
 
   return (
@@ -83,39 +131,35 @@ const FeaturedCategories = () => {
           </p>
         </div>
 
-        {loadingCounts ? (
+        {loading ? (
             <div className="flex flex-col items-center justify-center py-10">
                 <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-b-4 border-green-500 mb-2"></div>
-                <p className="text-gray-600">Chargement des comptes...</p>
+                <p className="text-gray-600">Chargement des catégories...</p>
             </div>
-        ) : errorCounts ? (
+        ) : error ? (
             <div className="text-center text-red-600 py-10">
-                <p>{errorCounts}</p>
+                <p>{error}</p>
                 <p className="text-sm text-gray-500">Veuillez vérifier le serveur ou réessayer.</p>
             </div>
         ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {categoriesConfig.map((category, index) => {
-                    // Récupérer le compte réel pour cette catégorie, ou 0 si non disponible
-                    const count = categoryCounts[category.type] !== undefined ? categoryCounts[category.type] : 0;
-                    return (
-                        <Card
-                            key={index}
-                            className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-2"
-                            onClick={() => handleCategoryClick(category.type)}
-                        >
-                            <CardContent className="p-6 text-center">
-                                <div className={`w-16 h-16 ${category.bgColor} rounded-2xl flex items-center justify-center mx-auto mb-4`}>
-                                    <category.icon className={`h-8 w-8 ${category.color}`} />
-                                </div>
-                                <h3 className="font-semibold text-foreground mb-2">{category.name}</h3>
-                                <p className="text-sm text-muted-foreground">
-                                    {count.toLocaleString()} établissements
-                                </p>
-                            </CardContent>
-                        </Card>
-                    );
-                })}
+                {categories.map((category, index) => (
+                    <Card
+                        key={index}
+                        className="cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-2"
+                        onClick={() => handleCategoryClick(category.type)}
+                    >
+                        <CardContent className="p-6 text-center">
+                            <div className={`w-16 h-16 ${category.bgColor} rounded-2xl flex items-center justify-center mx-auto mb-4`}>
+                                <category.icon className={`h-8 w-8 ${category.color}`} />
+                            </div>
+                            <h3 className="font-semibold text-foreground mb-2">{category.name}</h3>
+                            <p className="text-sm text-muted-foreground">
+                                {category.count.toLocaleString()} établissement{category.count === 1 ? '' : 's'}
+                            </p>
+                        </CardContent>
+                    </Card>
+                ))}
             </div>
         )}
       </div>
