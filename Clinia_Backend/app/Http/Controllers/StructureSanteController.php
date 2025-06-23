@@ -223,45 +223,66 @@ class StructureSanteController extends Controller
     {
         $query = StructureSante::query()->with(['services', 'assurances', 'evaluations']);
 
-        // Filtre par type de structure
-        if ($request->filled('type_structure')) {
-            $query->where('type_structure', $request->input('type_structure'));
+        // Filtre par type (ex: laboratoire)
+        if ($request->filled('type')) {
+            $query->where('type_structure', $request->input('type'));
         }
 
-        // Filtre par services (array d'id_service)
-        if ($request->filled('services')) {
-            $serviceIds = $request->input('services');
-            $query->whereHas('services', function ($q) use ($serviceIds) {
-                $q->whereIn('services.id_service', $serviceIds);
+        // Recherche par ville, commune, quartier ou nom
+        if ($request->filled('search')) {
+            $searchTerm = $request->input('search');
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('ville', 'like', "%$searchTerm%")
+                ->orWhere('commune', 'like', "%$searchTerm%")
+                ->orWhere('quartier', 'like', "%$searchTerm%")
+                ->orWhere('nom_structure', 'like', "%$searchTerm%");
             });
         }
 
-        // Filtre par compagnies d'assurance (array d'id_assurance)
-        if ($request->filled('assurances')) {
-            $assuranceIds = $request->input('assurances');
-            $query->whereHas('assurances', function ($q) use ($assuranceIds) {
-                $q->whereIn('compagnies_assurances.id_assurance', $assuranceIds);
+        // Filtre par service (ex: "Radiologie et Imagerie")
+        if ($request->filled('service')) {
+            $serviceName = $request->input('service');
+            $query->whereHas('services', function ($q) use ($serviceName) {
+                $q->where('nom_service', 'like', "%$serviceName%");
             });
         }
 
-        // Filtre par distance (rayon en km) et géolocalisation
+        // Filtre par assurance (ex: "GSA - Générale des Assurances")
+        if ($request->filled('assurance')) {
+            $assuranceName = $request->input('assurance');
+            $query->whereHas('assurances', function ($q) use ($assuranceName) {
+                $q->where('nom_assurance', 'like', "%$assuranceName%");
+            });
+        }
+
+        // Filtre "ouvert maintenant"
+        if ($request->boolean('open_now')) {
+            $now = now();
+            $day = strtolower($now->format('l')); // ex: monday
+            $hour = $now->format('H:i');
+
+            // Filtrage basé sur le JSON "horaires_ouverture"
+            $query->whereJsonContains("horaires_ouverture->{$day}.ouvert", true)
+                ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(horaires_ouverture, '$.$day.heure_ouverture')) <= ?", [$hour])
+                ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(horaires_ouverture, '$.$day.heure_fermeture')) >= ?", [$hour]);
+        }
+
+        // Filtre par distance et géolocalisation
         if ($request->filled(['latitude', 'longitude', 'distance'])) {
             $lat = $request->input('latitude');
             $lng = $request->input('longitude');
             $distance = $request->input('distance');
 
-            // Haversine formula
-            $query->selectRaw('*, (6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) AS distance', [
-                $lat, $lng, $lat
-            ])
-            ->having('distance', '<=', $distance)
-            ->orderBy('distance');
+            $query->selectRaw('structures_santes.*, 
+                (6371 * acos(cos(radians(?)) * cos(radians(latitude)) 
+                * cos(radians(longitude) - radians(?)) 
+                + sin(radians(?)) * sin(radians(latitude)))) AS distance', [$lat, $lng, $lat])
+                ->having('distance', '<=', $distance)
+                ->orderBy('distance');
         }
 
-        $structures = $query->get();
-
         return response()->json([
-            'structures' => $structures,
+            'structures' => $query->get()
         ]);
     }
 

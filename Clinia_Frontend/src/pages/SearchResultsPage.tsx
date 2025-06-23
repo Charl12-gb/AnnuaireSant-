@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axiosConfig'; 
 import Header from '../components/Header'; 
 import Footer from '../components/Footer'; 
-import { Building2, Hospital, Stethoscope, FlaskConical, Syringe, BriefcaseMedical, HeartPulse, Search, MapPin, XCircle } from 'lucide-react'; // Icônes
+import { Building2, Hospital, Stethoscope, FlaskConical, Syringe, BriefcaseMedical, HeartPulse, Search, MapPin, XCircle } from 'lucide-react';
 
-// Vous aurez besoin d'une fonction pour mapper les noms d'icônes aux composants d'icônes
+// Fonction pour mapper les noms d'icônes aux composants d'icônes
 const getIconComponent = (iconName) => {
     switch (iconName) {
         case 'Building2': return Building2;
@@ -16,7 +16,7 @@ const getIconComponent = (iconName) => {
         case 'Syringe': return Syringe;
         case 'BriefcaseMedical': return BriefcaseMedical;
         case 'HeartPulse': return HeartPulse;
-        default: return Building2; // Icône par défaut
+        default: return Building2;
     }
 };
 
@@ -37,9 +37,9 @@ const SearchResultsPage = () => {
     const [selectedType, setSelectedType] = useState('');
     const [selectedService, setSelectedService] = useState('');
     const [selectedAssurance, setSelectedAssurance] = useState('');
-    const [userLocation, setUserLocation] = useState(null); // Pour la géolocalisation
-    const [radius, setRadius] = useState(10); // Rayon de recherche par défaut (10 km)
-    const [openNow, setOpenNow] = useState(false); // Nouveau champ pour "Ouvert maintenant"
+    const [userLocation, setUserLocation] = useState(null);
+    const [radius, setRadius] = useState(10);
+    const [openNow, setOpenNow] = useState(false);
 
     // État pour les résultats de la recherche de structures
     const [searchResults, setSearchResults] = useState([]);
@@ -55,40 +55,55 @@ const SearchResultsPage = () => {
             setFilterError(null);
             try {
                 // Récupérer les types de structure
-                const typesResponse = await api.get('/structure-types'); // Endpoint supposé
-                // Ajouter une option "Tous les types" en premier
-                const dynamicTypes = [{ value: '', label: 'Tous les types', icon_name: 'Building2' }, // Utilise icon_name
-                                      ...typesResponse.data.data.map(type => ({
-                                          value: type.slug || type.nom.toLowerCase().replace(/\s/g, '_'),
-                                          label: type.nom,
-                                          icon_name: type.icon_name || 'Building2'
-                                      }))
-                                     ];
+                const typesResponse = await api.get('/structure-types');
+                
+                // Vérifier si les données existent et sont un tableau
+                const typesData = typesResponse.data?.data || typesResponse.data || [];
+                const dynamicTypes = [
+                    { value: '', label: 'Tous les types', icon_name: 'Building2' },
+                    ...(Array.isArray(typesData) ? typesData.map(type => ({
+                        value: type.value?.toLowerCase()?.replace(/\s/g, '_') || type.id,
+                        label: type.label || 'Type inconnu',
+                        icon_name: type.icon_name || 'Building2'
+                    })) : [])
+                ];
                 setStructureTypes(dynamicTypes);
 
                 // Récupérer les services
-                const servicesResponse = await api.get('/services'); // Endpoint supposé
-                const dynamicServices = [{ value: '', label: 'Tous les services' },
-                                         ...servicesResponse.data.data.map(service => ({
-                                             value: service.id,
-                                             label: service.nom_service
-                                         }))
-                                        ];
+                const servicesResponse = await api.get('/services');
+
+                console.log('Services response:', servicesResponse.data); // Debug
+                
+                const servicesData = servicesResponse.data?.services || [];
+                const dynamicServices = [
+                    { value: '', label: 'Tous les services' },
+                    ...(Array.isArray(servicesData) ? servicesData.map(service => ({
+                        value: service.id,
+                        label: service.nom_service || service.nom || service.name || 'Service inconnu'
+                    })) : [])
+                ];
                 setAvailableServices(dynamicServices);
 
                 // Récupérer les assurances
-                const assurancesResponse = await api.get('/assurances'); // Endpoint supposé
-                const dynamicAssurances = [{ value: '', label: 'Toutes les assurances' },
-                                           ...assurancesResponse.data.data.map(assurance => ({
-                                               value: assurance.id,
-                                               label: assurance.nom_assurance
-                                           }))
-                                          ];
+                const assurancesResponse = await api.get('/assurances');
+
+                const assurancesData = assurancesResponse.data?.compagnies || [];
+                const dynamicAssurances = [
+                    { value: '', label: 'Toutes les assurances' },
+                    ...(Array.isArray(assurancesData) ? assurancesData.map(assurance => ({
+                        value: assurance.id,
+                        label: assurance.nom_assurance || assurance.nom || assurance.name || 'Assurance inconnue'
+                    })) : [])
+                ];
                 setAvailableAssurances(dynamicAssurances);
 
             } catch (err) {
-                console.error("Erreur lors de la récupération des options de filtre:", err);
                 setFilterError("Impossible de charger les options de filtre. Veuillez vérifier votre connexion.");
+                
+                // Définir des valeurs par défaut en cas d'erreur
+                setStructureTypes([{ value: '', label: 'Tous les types', icon_name: 'Building2' }]);
+                setAvailableServices([{ value: '', label: 'Tous les services' }]);
+                setAvailableAssurances([{ value: '', label: 'Toutes les assurances' }]);
             } finally {
                 setLoadingFilters(false);
             }
@@ -129,8 +144,7 @@ const SearchResultsPage = () => {
                 type: selectedType,
                 service: selectedService,
                 assurance: selectedAssurance,
-                open_now: openNow, // Ajout du filtre "Ouvert maintenant"
-                // Ajoutez userLocation et radius si vous voulez une recherche par proximité
+                open_now: openNow,
                 ...(userLocation && radius && {
                     user_lat: userLocation.latitude,
                     user_lon: userLocation.longitude,
@@ -138,10 +152,23 @@ const SearchResultsPage = () => {
                 })
             };
 
+            // Nettoyer les paramètres vides
+            Object.keys(params).forEach(key => {
+                if (params[key] === '' || params[key] === null || params[key] === undefined) {
+                    delete params[key];
+                }
+            });
+
+            console.log('Search params:', params); // Debug
+
             const response = await api.get('/structures/search', { params });
-            setSearchResults(response.data.structures);
+            console.log('Search response:', response.data); // Debug
+            
+            const structuresData = response.data?.structures || response.data?.data || response.data || [];
+            setSearchResults(Array.isArray(structuresData) ? structuresData : []);
         } catch (err) {
             console.error("Erreur lors de la recherche des structures:", err);
+            console.error("Détails de l'erreur:", err.response?.data);
             setResultsError(err.response?.data?.message || "Erreur lors de la recherche des structures. Veuillez réessayer.");
         } finally {
             setLoadingResults(false);
@@ -156,10 +183,8 @@ const SearchResultsPage = () => {
         setSelectedAssurance('');
         setRadius(10);
         setOpenNow(false);
-        setSearchResults([]); // Efface les résultats
-        setResultsError(null); // Efface les erreurs
-        // Optionnel: relancer la recherche par défaut si vous voulez des résultats sans filtres
-        // handleSearch(new Event('submit'));
+        setSearchResults([]);
+        setResultsError(null);
     };
 
     // ******************************************************
@@ -194,18 +219,17 @@ const SearchResultsPage = () => {
         }
     };
 
-
     // Obtenir le composant icône pour le type de structure sélectionné
     const SelectedTypeIcon = selectedType
         ? getIconComponent(structureTypes.find(type => type.value === selectedType)?.icon_name)
-        : Building2; // Icône par défaut si "Tous les types" ou rien n'est sélectionné
+        : Building2;
 
     // ******************************************************
     // RENDU DU COMPOSANT
     // ******************************************************
     return (
         <div className="min-h-screen flex flex-col bg-gray-100">
-            <Header /> {/* */}
+            <Header />
             <main className="flex-grow container mx-auto px-4 py-8">
                 {/* Section Filtres de recherche */}
                 <section className="bg-white rounded-lg shadow-md p-6 mb-8 w-full max-w-4xl mx-auto">
@@ -228,10 +252,13 @@ const SearchResultsPage = () => {
                     {loadingFilters ? (
                         <p className="text-gray-600 text-center py-4">Chargement des filtres...</p>
                     ) : filterError ? (
-                        <p className="text-red-500 text-center py-4">Erreur de chargement des filtres: {filterError}</p>
+                        <div className="text-red-500 text-center py-4">
+                            <p>Erreur de chargement des filtres: {filterError}</p>
+                            <p className="text-sm mt-2">Les filtres par défaut sont utilisés.</p>
+                        </div>
                     ) : (
                         <form onSubmit={handleSearch} className="space-y-6">
-                            {/* Barre de recherche principale en haut */}
+                            {/* Barre de recherche principale */}
                             <div className="relative">
                                 <input
                                     type="text"
@@ -245,22 +272,17 @@ const SearchResultsPage = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {/* Type de structure */}
-                                <div>
+                                <div className="relative">
                                     <label htmlFor="structureType" className="block text-sm font-medium text-gray-700 mb-1">
                                         Type de structure
                                     </label>
-                                    {/* Pour simuler l'icône dans le select comme sur l'image, c'est plus complexe.
-                                        Ici, on utilise un select standard, mais vous pouvez le styliser avec un composant
-                                        custom si vous voulez l'icône *devant* le texte de l'option sélectionnée.
-                                        Pour l'instant, l'icône est juste pour le JS qui mappe le nom.
-                                    */}
                                     <div className="relative">
                                         <SelectedTypeIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                                         <select
                                             id="structureType"
                                             value={selectedType}
                                             onChange={(e) => setSelectedType(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white"
+                                            className="w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white"
                                         >
                                             {structureTypes.map((type) => (
                                                 <option key={type.value} value={type.value}>
@@ -269,48 +291,62 @@ const SearchResultsPage = () => {
                                             ))}
                                         </select>
                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                                            </svg>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Services proposés */}
-                                <div>
+                                <div className="relative">
                                     <label htmlFor="services" className="block text-sm font-medium text-gray-700 mb-1">
                                         Services proposés
                                     </label>
-                                    <select
-                                        id="services"
-                                        value={selectedService}
-                                        onChange={(e) => setSelectedService(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white"
-                                    >
-                                        {availableServices.map((service) => (
-                                            <option key={service.value} value={service.value}>{service.label}</option>
-                                        ))}
-                                    </select>
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                    <div className="relative">
+                                        <select
+                                            id="services"
+                                            value={selectedService}
+                                            onChange={(e) => setSelectedService(e.target.value)}
+                                            className="w-full px-4 py-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white"
+                                        >
+                                            {availableServices.map((service) => (
+                                                <option key={service.value} value={service.value}>
+                                                    {service.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                                            </svg>
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Compagnies d'assurance */}
-                                <div>
+                                <div className="relative">
                                     <label htmlFor="assurances" className="block text-sm font-medium text-gray-700 mb-1">
                                         Compagnies d'assurance
                                     </label>
-                                    <select
-                                        id="assurances"
-                                        value={selectedAssurance}
-                                        onChange={(e) => setSelectedAssurance(e.target.value)}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white"
-                                    >
-                                        {availableAssurances.map((assurance) => (
-                                            <option key={assurance.value} value={assurance.value}>{assurance.label}</option>
-                                        ))}
-                                    </select>
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                    <div className="relative">
+                                        <select
+                                            id="assurances"
+                                            value={selectedAssurance}
+                                            onChange={(e) => setSelectedAssurance(e.target.value)}
+                                            className="w-full px-4 py-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none bg-white"
+                                        >
+                                            {availableAssurances.map((assurance) => (
+                                                <option key={assurance.value} value={assurance.value}>
+                                                    {assurance.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                                            </svg>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -339,7 +375,7 @@ const SearchResultsPage = () => {
                                         max="100"
                                         value={radius}
                                         onChange={(e) => setRadius(parseInt(e.target.value))}
-                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-lg"
+                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                                     />
                                 </div>
                             </div>
@@ -359,7 +395,12 @@ const SearchResultsPage = () => {
                 {/* Section Résultats de la recherche */}
                 <section className="bg-white rounded-lg shadow-md p-6 w-full max-w-4xl mx-auto">
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl font-semibold text-gray-800">Résultats de la recherche</h3>
+                        <h3 className="text-xl font-semibold text-gray-800">
+                            Résultats de la recherche
+                            {searchResults.length > 0 && (
+                                <span className="text-sm text-gray-600 ml-2">({searchResults.length} résultat{searchResults.length > 1 ? 's' : ''})</span>
+                            )}
+                        </h3>
                         {searchResults.length > 0 && (
                             <button
                                 onClick={handleViewAllOnMapClick}
@@ -372,53 +413,86 @@ const SearchResultsPage = () => {
                     </div>
 
                     {resultsError && (
-                        <p className="text-red-500 text-center py-4">{resultsError}</p>
+                        <div className="text-red-500 text-center py-4 bg-red-50 border border-red-200 rounded-lg">
+                            {resultsError}
+                        </div>
                     )}
 
                     {!loadingResults && searchResults.length === 0 && !resultsError && (
                         <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg text-center flex items-center justify-center space-x-2">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-info">
-                                <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 16v-4"/>
+                                <path d="M12 8h.01"/>
                             </svg>
-                            <span>Information : Aucune structure trouvée pour vos critères.</span>
+                            <span>Aucune structure trouvée pour vos critères. Essayez de modifier vos filtres.</span>
                         </div>
                     )}
 
                     {loadingResults ? (
-                        <p className="text-gray-600 text-center py-4">Chargement des résultats...</p>
+                        <div className="text-gray-600 text-center py-8">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mx-auto mb-4"></div>
+                            Chargement des résultats...
+                        </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {searchResults.map((structure) => (
-                                <div key={structure.id_structure} className="structure-card bg-gray-50 border border-gray-200 rounded-lg p-4 shadow-sm flex flex-col justify-between">
-                                    <div>
-                                        <h4 className="structure-name text-lg font-bold text-gray-900 mb-1">{structure.nom_structure}</h4>
-                                        <p className="structure-address text-gray-600 text-sm flex items-center mb-2">
-                                            <MapPin size={16} className="inline-icon mr-1 text-gray-500" /> {structure.adresse}, {structure.ville}
-                                        </p>
-                                        {/* Ajoutez d'autres informations pertinentes de la structure ici */}
-                                        {structure.type_structure && (
-                                            <p className="text-gray-700 text-sm mb-1">
-                                                <span className="font-semibold">Type:</span> {structure.type_structure.nom}
-                                            </p>
+                                <div
+                                key={structure.id_structure || structure.id}
+                                className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-lg transition-shadow duration-300 p-5 flex flex-col justify-between"
+                                >
+                                <div>
+                                    {/* Nom de la structure */}
+                                    <h4 className="text-xl font-semibold text-gray-800 mb-1">
+                                    {structure.nom_structure || structure.nom || 'Structure sans nom'}
+                                    </h4>
+
+                                    {structure.type_structure && (
+                                        <div className="text-sm text-gray-500 mb-2">
+                                            🏥 <span className="font-medium">Type :</span>{' '}
+                                            {structure.type_structure
+                                            .replace(/_/g, ' ')
+                                            .replace(/^\w/, c => c.toUpperCase())}
+                                        </div>
                                         )}
-                                        {/* Exemple pour les services, à adapter si vous avez une relation Many-to-Many */}
-                                        {/* {structure.services && structure.services.length > 0 && (
-                                            <p className="text-gray-700 text-sm mb-1">
-                                                <span className="font-semibold">Services:</span> {structure.services.map(s => s.nom_service).join(', ')}
-                                            </p>
-                                        )} */}
-                                    </div>
-                                    <div className="card-actions mt-4 flex justify-end">
-                                        <button
-                                            onClick={() => handleViewOnMapClick(structure)}
-                                            className="bg-green-500 text-white py-2 px-3 rounded-lg flex items-center text-sm hover:bg-green-600 transition-colors duration-200"
-                                        >
-                                            <MapPin size={18} className="mr-1" /> Voir sur la carte
-                                        </button>
-                                    </div>
+
+                                    {/* Adresse complète */}
+                                    <p className="text-sm text-gray-600 flex items-center mb-1">
+                                    <MapPin size={16} className="mr-1 text-gray-400" />
+                                    {structure.adresse || 'Adresse inconnue'}
+                                    {structure.ville && `, ${structure.ville}`}
+                                    </p>
+
+                                    {/* Numéro de téléphone */}
+                                    {structure.telephone_principal && (
+                                    <p className="text-sm text-gray-600 flex items-center mb-1">
+                                        📞 <span className="ml-1">{structure.telephone_principal}</span>
+                                    </p>
+                                    )}
+
+                                    {/* Site web (optionnel) */}
+                                    {structure.site_web && (
+                                    <p className="text-sm text-blue-600 underline mb-1">
+                                        🌐 <a href={structure.site_web} target="_blank" rel="noopener noreferrer">
+                                        {structure.site_web.replace(/^https?:\/\//, '')}
+                                        </a>
+                                    </p>
+                                    )}
+                                </div>
+
+                                {/* Bouton d'action */}
+                                <div className="mt-4 flex justify-end">
+                                    <button
+                                    onClick={() => handleViewOnMapClick(structure)}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-1"
+                                    >
+                                    <MapPin size={16} />
+                                    Voir sur la carte
+                                    </button>
+                                </div>
                                 </div>
                             ))}
-                        </div>
+                            </div>
                     )}
                 </section>
             </main>

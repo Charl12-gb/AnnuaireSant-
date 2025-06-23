@@ -1,22 +1,15 @@
-// app/Http/Controllers/TypeStructureController.php
 <?php
 
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\StructureSante; // Correctement importé et utilisé
+use App\Models\StructureSante;
 
 class TypeStructureController extends Controller
 {
-    /**
-     * Retourne la liste des types de structure valides.
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function index()
     {
-        // Récupère les types de structure définis dans la constante
-        $types = StructureSante::VALID_STRUCTURE_TYPES; // Cette ligne est correcte.
+        $types = StructureSante::VALID_STRUCTURE_TYPES;
 
         $formattedTypes = [];
         foreach ($types as $type) {
