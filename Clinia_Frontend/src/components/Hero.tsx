@@ -4,6 +4,7 @@ import { Search, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button"; // En supposant que c'est votre composant Button de la bibliothèque UI
 import { Input } from "@/components/ui/input";   // En supposant que c'est votre composant Input de la bibliothèque UI
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
 
 // Note: Suppression de la prop onSearch car la navigation sera gérée en interne
 // interface HeroProps { onSearch: (query: string, category: string) => void; }
@@ -12,6 +13,7 @@ const Hero = () => { // Changement de prop à pas de props
   const [searchQuery, setSearchQuery] = useState("");
   const [currentTypeIndex, setCurrentTypeIndex] = useState(0);
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth(); // Utilisation de useAuth pour obtenir l'utilisateur
 
   const healthCenterTypes = [
     "hôpital",
@@ -92,6 +94,7 @@ const Hero = () => { // Changement de prop à pas de props
         </div>
 
         {/* Boutons d'action */}
+        { isAuthenticated ? (
         <div className="flex flex-wrap justify-center gap-4">
           <Button
             onClick={handleAddBusiness}
@@ -102,6 +105,22 @@ const Hero = () => { // Changement de prop à pas de props
             Ajouter une structure de santé
           </Button>
         </div>
+        ) : (
+          <div className="flex flex-wrap justify-center gap-4">
+            <Button
+              onClick={() => navigate('/gerer-connexion')}
+              className="bg-white/10 border-white/30 text-white hover:bg-white/20 rounded-full px-6"
+            >
+              Se connecter
+            </Button>
+            <Button
+              onClick={() => navigate('/gerer-connexion')}
+              className="bg-green-600 hover:bg-green-700 text-white rounded-full px-6"
+            >
+              S'inscrire
+            </Button>
+          </div>
+        )}
       </div>
     </section>
   );

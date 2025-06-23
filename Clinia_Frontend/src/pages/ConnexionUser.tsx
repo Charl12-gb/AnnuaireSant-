@@ -291,12 +291,10 @@ const ConnexionUser = () => {
             ) : isLogin ? (
               <>
                 <User className="w-5 h-5 mr-2" />
-                Se connecter
               </>
             ) : (
               <>
                 <UserPlus className="w-5 h-5 mr-2" />
-                S'inscrire
               </>
             )}
             {loadingAuth ? 'Chargement...' : (isLogin ? 'Se connecter' : "S'inscrire")}
