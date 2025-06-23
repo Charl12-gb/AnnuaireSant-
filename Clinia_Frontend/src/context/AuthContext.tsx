@@ -95,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (response.ok) {
         // Le backend doit renvoyer 'token', 'utilisateur', 'redirect_to'
-        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('authToken', data.access_token);
         localStorage.setItem('utilisateur', JSON.stringify(data.utilisateur));
         setIsAuthenticated(true);
         setUser(data.utilisateur); // Affectez directement l'objet utilisateur retourné par le backend
@@ -158,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log("AuthContext: Données JSON de la réponse d'inscription:", data);
 
       if (response.ok) {
-        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('authToken', data.access_token);
         localStorage.setItem('utilisateur', JSON.stringify(data.utilisateur));
         setIsAuthenticated(true);
         setUser(data.utilisateur); // Affectez directement l'objet utilisateur retourné par le backend
