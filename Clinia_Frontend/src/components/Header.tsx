@@ -4,12 +4,14 @@ import { Menu, X, User, Search } from "lucide-react";
 import { Button } from "@/components/ui/button"; // En supposant que c'est votre composant Button de la bibliothèque UI
 import { useNavigate } from "react-router-dom";
 import logo from "/assets/logo.png"; // Assurez-vous que le chemin est correct
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentHealthcareIndex, setCurrentHealthcareIndex] = useState(0);
   const [headerSearchQuery, setHeaderSearchQuery] = useState(""); // <-- Nouvel état pour la recherche de l'en-tête
   const navigate = useNavigate();
+  const { isAuthenticated, logout } = useAuth(); // Get auth state and logout function
 
   const healthcareFacilities = [
     "hôpital",
@@ -103,18 +105,29 @@ const Header = () => {
 
           {/* Actions Desktop */}
           <div className="hidden md:flex items-center space-x-4">
-            <button
-              onClick={handleConnexion}
-              className="text-sm font-medium text-foreground hover:text-green-700 transition-colors"
-            >
-              Se connecter
-            </button>
-            <Button
-              onClick={handleAddBusiness}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded-full shadow-sm transition duration-300 ease-in-out text-sm font-semibold"
-            >
-              Ajouter une structure de santé
-            </Button>
+            {isAuthenticated ? (
+              <button
+                onClick={logout}
+                className="text-sm font-medium text-foreground hover:text-red-700 transition-colors"
+              >
+                Se déconnecter
+              </button>
+            ) : (
+              <button
+                onClick={handleConnexion}
+                className="text-sm font-medium text-foreground hover:text-green-700 transition-colors"
+              >
+                Se connecter
+              </button>
+            )}
+            {isAuthenticated && (
+              <Button
+                onClick={handleAddBusiness}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded-full shadow-sm transition duration-300 ease-in-out text-sm font-semibold"
+              >
+                Ajouter une structure de santé
+              </Button>
+            )}
           </div>
 
           {/* Bouton Menu Mobile */}
@@ -156,30 +169,47 @@ const Header = () => {
                 </Button>
               </div>
 
-              {/* Icône Se connecter */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  handleConnexionGestion();
-                  setIsMenuOpen(false);
-                }}
-                className="self-start"
-                aria-label="Se connecter"
-              >
-                <User className="h-5 w-5 text-foreground hover:text-green-700" />
-              </Button>
+              {/* Icône Se connecter / Se déconnecter */}
+              {isAuthenticated ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    logout();
+                    setIsMenuOpen(false);
+                  }}
+                  className="self-start"
+                  aria-label="Se déconnecter"
+                >
+                  <User className="h-5 w-5 text-foreground hover:text-red-700" /> {/* Consider different icon for logout e.g. LogOut */}
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    handleConnexionGestion();
+                    setIsMenuOpen(false);
+                  }}
+                  className="self-start"
+                  aria-label="Se connecter"
+                >
+                  <User className="h-5 w-5 text-foreground hover:text-green-700" />
+                </Button>
+              )}
 
               {/* Bouton Ajouter une structure */}
-              <Button
-                onClick={() => {
-                  handleAddBusiness();
-                  setIsMenuOpen(false);
-                }}
-                className="bg-green-600 hover:bg-green-700 text-white w-full mt-2 px-4 py-1 rounded-full shadow-sm transition duration-300 ease-in-out text-sm font-semibold"
-              >
-                Ajouter une structure de santé
-              </Button>
+              {isAuthenticated && (
+                <Button
+                  onClick={() => {
+                    handleAddBusiness();
+                    setIsMenuOpen(false);
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white w-full mt-2 px-4 py-1 rounded-full shadow-sm transition duration-300 ease-in-out text-sm font-semibold"
+                >
+                  Ajouter une structure de santé
+                </Button>
+              )}
             </div>
           </div>
         )}
