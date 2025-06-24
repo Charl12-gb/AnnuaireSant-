@@ -12,6 +12,7 @@ import ConnexionUser from "./pages/ConnexionUser";
 import StructuresListe from "./pages/StructuresListe"; 
 import SearchResultsPage from './pages/SearchResultsPage'; // La nouvelle page
 import StructureLocationPage from './pages/StructureLocationPage'; 
+import MapPage from './pages/MapPage'; // Import the new MapPage
 import StructureLocationMap from './components/TestMap';
 import { AuthProvider } from './context/AuthContext';
 
@@ -41,6 +42,7 @@ const App = () => (
           <Route path="/structures" element={<StructuresListe />} />
           {/* Nouvelle route pour la carte */}
           <Route path="/structure-location" element={<StructureLocationMap />} />
+          <Route path="/map" element={<MapPage />} /> {/* Add route for MapPage */}
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
