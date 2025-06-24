@@ -1,6 +1,6 @@
 // src/pages/SearchResultsPage.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axiosConfig'; 
 import Header from '../components/Header'; 
 import Footer from '../components/Footer'; 
@@ -22,6 +22,7 @@ const getIconComponent = (iconName) => {
 
 const SearchResultsPage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
 
     // État pour les données des filtres (initialement vides)
     const [structureTypes, setStructureTypes] = useState([]);
@@ -45,6 +46,24 @@ const SearchResultsPage = () => {
     const [searchResults, setSearchResults] = useState([]);
     const [loadingResults, setLoadingResults] = useState(false);
     const [resultsError, setResultsError] = useState(null);
+
+    // État pour savoir si la recherche automatique a été effectuée
+    const [autoSearchDone, setAutoSearchDone] = useState(false);
+
+    // ******************************************************
+    // FONCTION UTILITAIRE POUR EXTRAIRE LES PARAMÈTRES URL
+    // ******************************************************
+    const getUrlParams = () => {
+        const searchParams = new URLSearchParams(location.search);
+        return {
+            type: searchParams.get('type') || '',
+            service: searchParams.get('service') || '',
+            assurance: searchParams.get('assurance') || '',
+            search: searchParams.get('search') || '',
+            radius: searchParams.get('radius') || '10',
+            openNow: searchParams.get('openNow') === 'true'
+        };
+    };
 
     // ******************************************************
     // EFFET POUR RÉCUPÉRER LES OPTIONS DE FILTRE DE L'API
@@ -113,6 +132,42 @@ const SearchResultsPage = () => {
     }, []);
 
     // ******************************************************
+    // EFFET POUR INITIALISER LES FILTRES DEPUIS L'URL
+    // ******************************************************
+    useEffect(() => {
+        const urlParams = getUrlParams();
+        
+        // Initialiser les filtres avec les paramètres URL
+        setSearchTerm(urlParams.search);
+        setSelectedType(urlParams.type);
+        setSelectedService(urlParams.service);
+        setSelectedAssurance(urlParams.assurance);
+        setRadius(parseInt(urlParams.radius));
+        setOpenNow(urlParams.openNow);
+        
+        console.log('Paramètres URL détectés:', urlParams); // Debug
+    }, [location.search]);
+
+    // ******************************************************
+    // EFFET POUR LA RECHERCHE AUTOMATIQUE QUAND LES FILTRES SONT CHARGÉS
+    // ******************************************************
+    useEffect(() => {
+        // Vérifier si les filtres sont chargés et si une recherche automatique doit être effectuée
+        if (!loadingFilters && !autoSearchDone) {
+            const urlParams = getUrlParams();
+            
+            // Vérifier s'il y a des paramètres de recherche dans l'URL
+            const hasSearchParams = urlParams.type || urlParams.service || urlParams.assurance || urlParams.search;
+            
+            if (hasSearchParams) {
+                console.log('Lancement de la recherche automatique avec les paramètres URL');
+                performSearch();
+                setAutoSearchDone(true);
+            }
+        }
+    }, [loadingFilters, autoSearchDone]);
+
+    // ******************************************************
     // EFFET POUR LA GÉOLOCALISATION DE L'UTILISATEUR
     // ******************************************************
     useEffect(() => {
@@ -133,8 +188,7 @@ const SearchResultsPage = () => {
     // ******************************************************
     // FONCTION POUR LA RECHERCHE DE STRUCTURES
     // ******************************************************
-    const handleSearch = async (e) => {
-        e.preventDefault();
+    const performSearch = async () => {
         setLoadingResults(true);
         setResultsError(null);
 
@@ -175,6 +229,11 @@ const SearchResultsPage = () => {
         }
     };
 
+    const handleSearch = async (e) => {
+        e.preventDefault();
+        await performSearch();
+    };
+
     // Fonction pour réinitialiser les filtres
     const handleResetFilters = () => {
         setSearchTerm('');
@@ -185,6 +244,10 @@ const SearchResultsPage = () => {
         setOpenNow(false);
         setSearchResults([]);
         setResultsError(null);
+        setAutoSearchDone(false);
+        
+        // Nettoyer aussi l'URL
+        navigate('/search-results', { replace: true });
     };
 
     // ******************************************************

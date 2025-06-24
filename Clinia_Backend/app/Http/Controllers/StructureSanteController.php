@@ -219,72 +219,82 @@ class StructureSanteController extends Controller
         }
     }
 
-    public function search(Request $request)
-    {
-        $query = StructureSante::query()->with(['services', 'assurances', 'evaluations']);
+public function search(Request $request)
+{
+    $query = StructureSante::query()->with(['services', 'assurances', 'evaluations']);
 
-        // Filtre par type (ex: laboratoire)
-        if ($request->filled('type')) {
-            $query->where('type_structure', $request->input('type'));
-        }
+    // Filtre par type (ex: laboratoire)
+    if ($request->filled('type')) {
+        $query->where('type_structure', $request->input('type'));
+    }
 
-        // Recherche par ville, commune, quartier ou nom
-        if ($request->filled('search')) {
-            $searchTerm = $request->input('search');
-            $query->where(function ($q) use ($searchTerm) {
-                $q->where('ville', 'like', "%$searchTerm%")
-                ->orWhere('commune', 'like', "%$searchTerm%")
-                ->orWhere('quartier', 'like', "%$searchTerm%")
-                ->orWhere('nom_structure', 'like', "%$searchTerm%");
-            });
-        }
+    // Recherche par ville, commune, quartier ou nom
+    if ($request->filled('search')) {
+        $searchTerm = $request->input('search');
+        $query->where(function ($q) use ($searchTerm) {
+            $q->where('ville', 'like', "%$searchTerm%")
+              ->orWhere('commune', 'like', "%$searchTerm%")
+              ->orWhere('quartier', 'like', "%$searchTerm%")
+              ->orWhere('nom_structure', 'like', "%$searchTerm%");
+        });
+    }
 
-        // Filtre par service (ex: "Radiologie et Imagerie")
-        if ($request->filled('service')) {
-            $serviceName = $request->input('service');
-            $query->whereHas('services', function ($q) use ($serviceName) {
-                $q->where('nom_service', 'like', "%$serviceName%");
-            });
-        }
+    // Filtre par service (ex: "Radiologie et Imagerie")
+    if ($request->filled('service')) {
+        $serviceName = $request->input('service');
+        $query->whereHas('services', function ($q) use ($serviceName) {
+            $q->where('nom_service', 'like', "%$serviceName%");
+        });
+    }
 
-        // Filtre par assurance (ex: "GSA - Générale des Assurances")
-        if ($request->filled('assurance')) {
-            $assuranceName = $request->input('assurance');
-            $query->whereHas('assurances', function ($q) use ($assuranceName) {
-                $q->where('nom_assurance', 'like', "%$assuranceName%");
-            });
-        }
+    // Filtre par assurance (ex: "GSA - Générale des Assurances")
+    if ($request->filled('assurance')) {
+        $assuranceName = $request->input('assurance');
+        $query->whereHas('assurances', function ($q) use ($assuranceName) {
+            $q->where('nom_assurance', 'like', "%$assuranceName%");
+        });
+    }
 
-        // Filtre "ouvert maintenant"
-        if ($request->boolean('open_now')) {
-            $now = now();
-            $day = strtolower($now->format('l')); // ex: monday
-            $hour = $now->format('H:i');
+    // Filtre "ouvert maintenant"
+    if ($request->boolean('open_now')) {
+        $now = now();
+        $day = strtolower($now->format('l')); // e.g. "monday"
+        $hour = $now->format('H:i');
+        $driver = DB::getDriverName();
 
-            // Filtrage basé sur le JSON "horaires_ouverture"
+        if ($driver === 'pgsql') {
+            $query->whereRaw("(horaires_ouverture->?->>'ouvert') = 'true'", [$day])
+                ->whereRaw("(horaires_ouverture->?->>'heure_ouverture') <= ?", [$day, $hour])
+                ->whereRaw("(horaires_ouverture->?->>'heure_fermeture') >= ?", [$day, $hour]);
+        } elseif ($driver === 'mysql') {
             $query->whereJsonContains("horaires_ouverture->{$day}.ouvert", true)
                 ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(horaires_ouverture, '$.$day.heure_ouverture')) <= ?", [$hour])
                 ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(horaires_ouverture, '$.$day.heure_fermeture')) >= ?", [$hour]);
         }
-
-        // Filtre par distance et géolocalisation
-        if ($request->filled(['latitude', 'longitude', 'distance'])) {
-            $lat = $request->input('latitude');
-            $lng = $request->input('longitude');
-            $distance = $request->input('distance');
-
-            $query->selectRaw('structures_santes.*, 
-                (6371 * acos(cos(radians(?)) * cos(radians(latitude)) 
-                * cos(radians(longitude) - radians(?)) 
-                + sin(radians(?)) * sin(radians(latitude)))) AS distance', [$lat, $lng, $lat])
-                ->having('distance', '<=', $distance)
-                ->orderBy('distance');
-        }
-
-        return response()->json([
-            'structures' => $query->get()
-        ]);
     }
+
+    // Filtre par distance et géolocalisation (optionnel)
+    if ($request->filled(['latitude', 'longitude', 'distance'])) {
+        $lat = $request->input('latitude');
+        $lng = $request->input('longitude');
+        $distance = $request->input('distance');
+
+        $query->selectRaw('structures_santes.*, 
+            (6371 * acos(cos(radians(?)) * cos(radians(latitude)) 
+            * cos(radians(longitude) - radians(?)) 
+            + sin(radians(?)) * sin(radians(latitude)))) AS distance', [$lat, $lng, $lat])
+            ->having('distance', '<=', $distance)
+            ->orderBy('distance');
+    }
+
+    // Limite des résultats (par défaut : 10)
+    $limit = $request->integer('limit', 10);
+    $structures = $query->limit($limit)->get();
+
+    return response()->json([
+        'structures' => $structures
+    ]);
+}
 
     /**
      * Retourne le nombre de structures par type.
