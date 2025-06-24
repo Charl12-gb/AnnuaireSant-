@@ -545,13 +545,16 @@ const SearchResultsPage = () => {
 
                                 {/* Bouton d'action */}
                                 <div className="mt-4 flex justify-end">
-                                    <button
-                                    onClick={() => handleViewOnMapClick(structure)}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-1"
-                                    >
-                                    <MapPin size={16} />
-                                    Voir sur la carte
-                                    </button>
+                                    {structure.latitude != null && structure.longitude != null &&
+                                     typeof structure.latitude === 'number' && typeof structure.longitude === 'number' && (
+                                        <button
+                                        onClick={() => handleViewOnMapClick(structure)}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-1"
+                                        >
+                                        <MapPin size={16} />
+                                        Voir sur la carte
+                                        </button>
+                                    )}
                                 </div>
                                 </div>
                             ))}
