@@ -254,16 +254,15 @@ const SearchResultsPage = () => {
     // GESTION DU CLIC "VOIR SUR LA CARTE" POUR UNE STRUCTURE
     // ******************************************************
     const handleViewOnMapClick = (structure) => {
-        navigate('/map', {
-            state: {
-                latitude: structure.latitude,
-                longitude: structure.longitude,
-                name: structure.nom_structure,
-                address: structure.adresse,
-                id_structure: structure.id_structure,
-                ville: structure.ville,
-            }
-        });
+        const params = new URLSearchParams();
+        if (structure.latitude != null) params.append('lat', String(structure.latitude));
+        if (structure.longitude != null) params.append('lng', String(structure.longitude));
+        if (structure.id_structure != null) params.append('id', String(structure.id_structure));
+        if (structure.nom_structure) params.append('name', structure.nom_structure);
+        if (structure.adresse) params.append('address', structure.adresse);
+        if (structure.ville) params.append('ville', structure.ville);
+
+        navigate(`/map?${params.toString()}`);
     };
 
     // ******************************************************
@@ -271,12 +270,30 @@ const SearchResultsPage = () => {
     // ******************************************************
     const handleViewAllOnMapClick = () => {
         if (searchResults.length > 0) {
-            navigate('/map', {
-                state: {
-                    structures: searchResults,
-                    userLocation: userLocation,
-                }
-            });
+            const validStructuresForMap = searchResults
+                .filter(s => s.latitude != null && s.longitude != null && typeof s.latitude === 'number' && typeof s.longitude === 'number')
+                .map(s => ({
+                    id_structure: s.id_structure,
+                    latitude: s.latitude,
+                    longitude: s.longitude,
+                    nom_structure: s.nom_structure,
+                    adresse: s.adresse,
+                    ville: s.ville,
+                }));
+
+            if (validStructuresForMap.length === 0) {
+                alert("Aucune des structures trouvées n'a de coordonnées valides pour l'affichage sur la carte.");
+                return;
+            }
+
+            const params = new URLSearchParams();
+            params.append('structures', JSON.stringify(validStructuresForMap));
+
+            if (userLocation && userLocation.latitude != null && userLocation.longitude != null) {
+                params.append('userLat', String(userLocation.latitude));
+                params.append('userLng', String(userLocation.longitude));
+            }
+            navigate(`/map?${params.toString()}`);
         } else {
             alert("Veuillez effectuer une recherche pour afficher des structures sur la carte.");
         }
