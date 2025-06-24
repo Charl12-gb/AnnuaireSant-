@@ -1,14 +1,12 @@
 import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom'; // Changed from useLocation
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L, { LatLngExpression, LatLngBoundsExpression } from 'leaflet';
 
 // Import Leaflet CSS
 import 'leaflet/dist/leaflet.css';
 
-// Leaflet Icon Fix (as seen in TestMap.tsx)
-// Ensure this runs only once, or is idempotent, if MapPage could re-render significantly.
-// For a typical page component, this is fine here.
+// Leaflet Icon Fix
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
@@ -16,35 +14,17 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
-// Define expected state structures
-interface SingleStructureState {
-  latitude?: number;
-  longitude?: number;
-  name?: string;
-  address?: string;
-  id_structure?: number; // Keep other relevant info if needed for popups etc.
+// Define structure for individual items (used in both single and multiple)
+interface StructureData {
+  id_structure: number;
+  latitude: number;
+  longitude: number;
+  nom_structure: string;
+  adresse: string;
   ville?: string;
 }
 
-interface MultipleStructuresState {
-  structures?: Array<{
-    id_structure: number;
-    latitude: number;
-    longitude: number;
-    nom_structure: string;
-    adresse: string;
-    ville?: string;
-  }>;
-  userLocation?: {
-    latitude: number;
-    longitude: number;
-  };
-}
-
-type MapPageState = SingleStructureState & MultipleStructuresState;
-
-
-// Component to adjust map bounds for multiple markers
+// Component to adjust map bounds
 const FitBounds: React.FC<{ bounds: LatLngBoundsExpression | undefined }> = ({ bounds }) => {
   const map = useMap();
   React.useEffect(() => {
@@ -56,108 +36,129 @@ const FitBounds: React.FC<{ bounds: LatLngBoundsExpression | undefined }> = ({ b
 };
 
 const MapPage: React.FC = () => {
-  const location = useLocation();
-  const state = location.state as MapPageState | null;
+  const [searchParams] = useSearchParams();
 
-  const defaultCenter: LatLngExpression = [9.3077, 2.3158]; // Center of Benin, approx.
+  const defaultCenter: LatLngExpression = [9.3077, 2.3158]; // Center of Benin
   const defaultZoom = 7;
 
-  if (!state || (!state.latitude && !state.structures)) {
+  let mapContent = null;
+  let boundsToFit: LatLngBoundsExpression | undefined = undefined;
+  let errorLoadingData = false;
+  let errorMessage = "Aucune donnée de localisation n'a été fournie ou les données sont invalides.";
+
+  // Attempt to parse single structure params
+  const singleLatParam = searchParams.get('lat');
+  const singleLngParam = searchParams.get('lng');
+  const singleIdParam = searchParams.get('id');
+  const singleNameParam = searchParams.get('name');
+  const singleAddressParam = searchParams.get('address');
+  const singleVilleParam = searchParams.get('ville');
+
+  // Attempt to parse multiple structures param
+  const structuresJsonParam = searchParams.get('structures');
+  const userLatParam = searchParams.get('userLat');
+  const userLngParam = searchParams.get('userLng');
+
+  if (singleLatParam && singleLngParam) {
+    try {
+      const lat = parseFloat(singleLatParam);
+      const lng = parseFloat(singleLngParam);
+      const id = singleIdParam ? parseInt(singleIdParam, 10) : Date.now(); // Use timestamp if ID missing for key
+      const name = singleNameParam || 'Structure';
+      const address = singleAddressParam || 'Adresse non disponible';
+      const ville = singleVilleParam || undefined;
+
+      if (isNaN(lat) || isNaN(lng)) throw new Error("Coordonnées invalides.");
+
+      const position: LatLngExpression = [lat, lng];
+      mapContent = (
+        <>
+          <Marker position={position}>
+            <Popup>
+              <b>{name}</b><br />
+              {address}
+              {ville && `, ${ville}`}
+            </Popup>
+          </Marker>
+        </>
+      );
+      boundsToFit = L.latLngBounds([position, position]);
+    } catch (e: any) {
+      console.error("Error parsing single structure params:", e);
+      errorLoadingData = true;
+      errorMessage = `Erreur lors de la lecture des données de la structure: ${e.message}`;
+    }
+  } else if (structuresJsonParam) {
+    try {
+      const structuresArray: StructureData[] = JSON.parse(structuresJsonParam);
+      const validStructures = structuresArray.filter(
+        s => s.latitude != null && s.longitude != null && typeof s.latitude === 'number' && typeof s.longitude === 'number'
+      );
+
+      if (validStructures.length === 0) {
+        errorLoadingData = true;
+        errorMessage = "Aucune structure avec des coordonnées valides n'a été fournie dans la liste.";
+      } else {
+        const points: LatLngExpression[] = validStructures.map(s => [s.latitude, s.longitude] as LatLngExpression);
+
+        let userPosition: LatLngExpression | null = null;
+        if (userLatParam && userLngParam) {
+          const uLat = parseFloat(userLatParam);
+          const uLng = parseFloat(userLngParam);
+          if (!isNaN(uLat) && !isNaN(uLng)) {
+            userPosition = [uLat, uLng];
+            points.push(userPosition);
+          }
+        }
+
+        if (points.length > 0) {
+          boundsToFit = L.latLngBounds(points);
+        }
+
+        mapContent = (
+          <>
+            {validStructures.map(structure => (
+              <Marker key={structure.id_structure} position={[structure.latitude, structure.longitude]}>
+                <Popup>
+                  <b>{structure.nom_structure}</b><br />
+                  {structure.adresse}
+                  {structure.ville && `, ${structure.ville}`}
+                </Popup>
+              </Marker>
+            ))}
+            {userPosition && (
+              <Marker position={userPosition}>
+                <Popup>Votre position</Popup>
+              </Marker>
+            )}
+            {boundsToFit && <FitBounds bounds={boundsToFit} />}
+          </>
+        );
+      }
+    } catch (e: any) {
+      console.error("Error parsing multiple structures param:", e);
+      errorLoadingData = true;
+      errorMessage = `Erreur lors de la lecture de la liste des structures: ${e.message}`;
+    }
+  } else {
+    errorLoadingData = true; // No relevant params found
+  }
+
+  if (errorLoadingData) {
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
         <h1>Erreur de localisation</h1>
-        <p>Aucune donnée de localisation n'a été fournie pour afficher la carte.</p>
-        {/* TODO: Add a link to go back or to homepage */}
+        <p>{errorMessage}</p>
       </div>
     );
   }
 
-  let mapContent = null;
-  let boundsToFit: LatLngBoundsExpression | undefined = undefined;
-
-  // Case 1: Single Structure
-  if (state.latitude && state.longitude && typeof state.latitude === 'number' && typeof state.longitude === 'number') {
-    const position: LatLngExpression = [state.latitude, state.longitude];
-    mapContent = (
-      <>
-        <Marker position={position}>
-          <Popup>
-            <b>{state.name || 'Structure'}</b><br />
-            {state.address || 'Adresse non disponible'}
-            {state.ville && `, ${state.ville}`}
-          </Popup>
-        </Marker>
-      </>
-    );
-    // For single marker, we can also use bounds to set initial view with padding
-    boundsToFit = L.latLngBounds([position, position]);
-  }
-  // Case 2: Multiple Structures
-  else if (state.structures && state.structures.length > 0) {
-    const validStructures = state.structures.filter(
-      s => s.latitude != null && s.longitude != null && typeof s.latitude === 'number' && typeof s.longitude === 'number'
-    );
-
-    if (validStructures.length === 0) {
-        return (
-            <div style={{ padding: '20px', textAlign: 'center' }}>
-              <h1>Erreur de localisation</h1>
-              <p>Aucune structure avec des coordonnées valides n'a été fournie.</p>
-            </div>
-          );
-    }
-
-    const points: LatLngExpression[] = validStructures.map(s => [s.latitude, s.longitude] as LatLngExpression);
-
-    if (state.userLocation && state.userLocation.latitude != null && state.userLocation.longitude != null) {
-      points.push([state.userLocation.latitude, state.userLocation.longitude] as LatLngExpression);
-    }
-
-    if (points.length > 0) {
-      boundsToFit = L.latLngBounds(points);
-    }
-
-    mapContent = (
-      <>
-        {validStructures.map(structure => (
-          <Marker key={structure.id_structure} position={[structure.latitude, structure.longitude]}>
-            <Popup>
-              <b>{structure.nom_structure}</b><br />
-              {structure.adresse}
-              {structure.ville && `, ${structure.ville}`}
-            </Popup>
-          </Marker>
-        ))}
-        {state.userLocation && state.userLocation.latitude != null && state.userLocation.longitude != null && (
-          <Marker
-            position={[state.userLocation.latitude, state.userLocation.longitude]}
-            // Optional: use a different icon for user location
-            // icon={L.icon({ iconUrl: 'path/to/user-marker.png', ... })}
-          >
-            <Popup>Votre position</Popup>
-          </Marker>
-        )}
-        {boundsToFit && <FitBounds bounds={boundsToFit} />}
-      </>
-    );
-  } else {
-     // Fallback if state is somehow invalid or empty after initial check
-     return (
-        <div style={{ padding: '20px', textAlign: 'center' }}>
-          <h1>Données invalides</h1>
-          <p>Les données de localisation fournies sont invalides ou incomplètes.</p>
-        </div>
-      );
-  }
-
-  // Determine initial center for MapContainer before FitBounds takes over
-  // If boundsToFit is defined, use its center. Otherwise, default.
   const initialCenter = boundsToFit ? boundsToFit.getCenter() : defaultCenter;
 
   return (
     <MapContainer
         center={initialCenter}
-        zoom={defaultZoom} // Initial zoom, FitBounds will adjust it
+        zoom={defaultZoom}
         scrollWheelZoom={true}
         style={{ height: '100vh', width: '100%' }}
     >
